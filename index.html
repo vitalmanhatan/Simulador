@@ -1,0 +1,704 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Simulador de Evaporadores</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Concepto: hoja de datos de ingeniería. Columna de entradas fija a la izquierda, resultados en el orden de los 6 pasos de la guía.
+   La única apuesta tipográfica está en el título y en la franja de indicadores. */
+:root{
+  --bg:#EEF1F4; --surface:#FFFFFF; --ink:#13202B; --muted:#536371;
+  --line:#CAD3DB; --line-soft:#E2E8ED; --accent:#0A6B7C; --accent-ink:#FFFFFF; --accent-soft:#D9EEF1;
+  --heat:#B4481A;
+  --good:#17744A; --good-soft:#DDF1E6; --warn:#8A5600; --warn-soft:#F8EBCF; --crit:#B3261E; --crit-soft:#F9E0DD;
+  --font-display:'Barlow Condensed','Arial Narrow',Arial,sans-serif;
+  --font-body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F161C; --surface:#17212A; --ink:#E6ECF1; --muted:#93A3B1;
+    --line:#2E3C48; --line-soft:#222F3A; --accent:#4FC0D1; --accent-ink:#06222A; --accent-soft:#143741;
+    --heat:#E38A5E;
+    --good:#5AC48A; --good-soft:#15301F; --warn:#E3A83B; --warn-soft:#3A2D10; --crit:#F08178; --crit-soft:#3E1A18;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F161C; --surface:#17212A; --ink:#E6ECF1; --muted:#93A3B1;
+  --line:#2E3C48; --line-soft:#222F3A; --accent:#4FC0D1; --accent-ink:#06222A; --accent-soft:#143741;
+  --heat:#E38A5E;
+  --good:#5AC48A; --good-soft:#15301F; --warn:#E3A83B; --warn-soft:#3A2D10; --crit:#F08178; --crit-soft:#3E1A18;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:var(--font-body); font-size:15px; line-height:1.55;
+  padding-block:22px 56px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap{max-width:1240px; margin-inline:auto}
+h1,h2,h3{margin:0; text-wrap:balance}
+.inst{display:flex; flex-wrap:wrap; gap:4px 18px; font-size:13px; color:var(--muted); letter-spacing:.02em}
+.inst b{color:var(--ink); font-weight:600}
+h1{font-family:var(--font-display); font-weight:700; font-size:clamp(34px,6vw,58px); line-height:1; letter-spacing:.005em; text-transform:uppercase; margin-top:12px}
+.lede{max-width:68ch; color:var(--muted); margin:12px 0 0}
+.layout{display:grid; gap:24px; margin-top:26px; grid-template-columns:minmax(0,1fr)}
+@media (min-width:1000px){
+  .layout{grid-template-columns:minmax(300px,350px) minmax(0,1fr); align-items:start}
+  .inputs{position:sticky; top:14px; max-height:calc(100vh - 28px); overflow:auto}
+}
+.inputs{background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:16px; min-width:0}
+.inputs h2{font-family:var(--font-display); font-size:22px; font-weight:600; text-transform:uppercase; letter-spacing:.03em}
+.seg{display:grid; gap:6px; margin:12px 0 8px}
+.seg button{
+  font:inherit; text-align:left; cursor:pointer; padding:9px 11px; border-radius:5px;
+  border:1px solid var(--line); background:var(--bg); color:var(--ink); line-height:1.3;
+}
+.seg button small{display:block; color:var(--muted); font-size:12.5px}
+.seg button[aria-pressed="true"]{border-color:var(--accent); background:var(--accent-soft); box-shadow:inset 3px 0 0 var(--accent)}
+.seg button:hover{border-color:var(--accent)}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.desc{font-size:13px; color:var(--muted); margin:0 0 4px}
+.mod{display:inline-block; font-size:12px; font-weight:600; color:var(--warn); background:var(--warn-soft); border-radius:4px; padding:2px 8px; margin:4px 0}
+.fields{display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr)); margin-top:10px}
+.field{min-width:0}
+.field label{display:block; font-size:13px; color:var(--muted); margin-bottom:3px}
+.field label i{font-style:normal; color:var(--ink)}
+.box{display:flex; align-items:stretch; border:1px solid var(--line); border-radius:5px; background:var(--surface); min-width:0}
+.box:focus-within{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent)}
+.box input{flex:1; min-width:0; border:0; background:transparent; color:var(--ink); font:500 14px var(--font-mono); padding:8px 9px; outline:none; font-variant-numeric:tabular-nums}
+.box span{align-self:center; padding:0 9px 0 2px; font-size:12px; color:var(--muted); white-space:nowrap}
+details.adv{margin-top:14px; border-top:1px solid var(--line-soft); padding-top:10px}
+details.adv summary{cursor:pointer; font-weight:600; font-size:14px}
+details.adv p{font-size:12.5px; color:var(--muted); margin:6px 0 0}
+.out{min-width:0; display:grid; gap:34px}
+.err{border:1px solid var(--crit); background:var(--crit-soft); color:var(--ink); border-radius:6px; padding:12px 16px}
+.err strong{color:var(--crit)}
+.err ul{margin:6px 0 0; padding-left:20px}
+.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); border-block:2px solid var(--ink)}
+.kpi{padding:12px 14px 10px; border-left:1px solid var(--line); min-width:0}
+.kpi:first-child{border-left:0}
+.kpi .l{font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
+.kpi .v{font-family:var(--font-display); font-weight:600; font-size:clamp(30px,4vw,42px); line-height:1.05; font-variant-numeric:tabular-nums; margin-top:2px}
+.kpi .u{font-size:12.5px; color:var(--muted)}
+.kpi.hot .v{color:var(--accent)}
+h2.sec{font-family:var(--font-display); font-weight:600; font-size:26px; text-transform:uppercase; letter-spacing:.03em; padding-bottom:6px; border-bottom:1px solid var(--line); margin-bottom:14px}
+.sec-note{font-size:13.5px; color:var(--muted); margin:-6px 0 12px; max-width:80ch}
+.scroll{overflow-x:auto; max-width:100%}
+table{width:100%; border-collapse:collapse; font-size:13.5px}
+th{font-size:11.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); font-weight:600; text-align:left; padding:6px 10px; border-bottom:1px solid var(--ink); white-space:nowrap}
+td{padding:7px 10px; border-bottom:1px solid var(--line-soft); vertical-align:middle}
+td.n,th.n{text-align:right; font-family:var(--font-mono); font-variant-numeric:tabular-nums; white-space:nowrap}
+tr.base td{background:var(--accent-soft)}
+td input{width:96px; border:1px solid var(--line); border-radius:4px; background:var(--surface); color:var(--ink); font:500 13px var(--font-mono); padding:5px 7px; text-align:right}
+.pill{display:inline-block; font-size:12px; font-weight:600; padding:2px 9px; border-radius:99px; border:1px solid currentColor; white-space:nowrap}
+.pill.good{color:var(--good); background:var(--good-soft)}
+.pill.warn{color:var(--warn); background:var(--warn-soft)}
+.pill.crit{color:var(--crit); background:var(--crit-soft)}
+ol.steps{list-style:none; margin:0; padding:0; display:grid; gap:0; counter-reset:paso}
+ol.steps li{display:grid; grid-template-columns:44px minmax(0,1fr); gap:10px; padding:12px 0; border-bottom:1px solid var(--line-soft); counter-increment:paso}
+ol.steps li::before{content:counter(paso); font-family:var(--font-display); font-weight:700; font-size:34px; line-height:1; color:var(--accent)}
+ol.steps h3{font-size:15px; font-weight:600}
+.calc{font-family:var(--font-mono); font-size:13px; line-height:1.75; margin-top:4px; overflow-wrap:anywhere}
+.calc b{font-weight:500; color:var(--accent)}
+.calc em{font-style:normal; color:var(--muted); font-family:var(--font-body); font-size:12px}
+pre.diag{margin:0; background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:14px 16px; font:400 12.5px/1.35 var(--font-mono); overflow-x:auto; color:var(--ink)}
+.notes p{margin:0 0 11px; max-width:80ch}
+.notes strong{font-weight:600}
+.charts{display:grid; gap:18px; grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr)); margin-bottom:12px}
+figure{margin:0; min-width:0}
+figcaption{font-size:13px; font-weight:600; margin-bottom:4px}
+svg.ch{width:100%; height:auto; display:block; background:var(--surface); border:1px solid var(--line); border-radius:6px}
+svg.ch text{font-family:var(--font-mono); font-size:11px; fill:var(--muted)}
+svg.ch text.t{fill:var(--ink)}
+svg.ch .grid{stroke:var(--line-soft); stroke-width:1}
+svg.ch .axis{stroke:var(--muted); stroke-width:1}
+svg.ch .ln{fill:none; stroke:var(--accent); stroke-width:2}
+svg.ch .pt{fill:var(--surface); stroke:var(--accent); stroke-width:1.8}
+svg.ch .bs{fill:var(--heat); stroke:var(--surface); stroke-width:2}
+.btnrow{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+.btn{font:inherit; font-weight:600; cursor:pointer; padding:9px 16px; border-radius:5px; border:1px solid var(--accent); background:var(--accent); color:var(--accent-ink)}
+.btn.ghost{background:transparent; color:var(--accent)}
+textarea.cp{width:100%; min-height:150px; margin-top:10px; font:12.5px/1.45 var(--font-mono); background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:10px}
+.fine{font-size:12.5px; color:var(--muted); max-width:90ch}
+details.tab summary{cursor:pointer; font-weight:600; font-size:14px}
+.pending{opacity:.45}
+
+html{color-scheme:light}
+body{margin:0}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="inst"><b>Operaciones Unitarias I (22SBQ16)</b><span>Ingeniería Bioquímica</span><span>Basado en la guía de la actividad práctica, subtema 2.3.2</span></div>
+    <h1>Simulador de evaporadores de un solo efecto</h1>
+    <p class="lede">Balances de materia y energía en régimen permanente, en unidades SI. Cambia cualquier dato y los seis pasos de cálculo, el diagrama, la validación y el análisis de sensibilidad se recalculan al instante.</p>
+  </header>
+
+  <div class="layout">
+    <aside class="inputs" aria-label="Datos de entrada">
+      <h2>Datos de entrada</h2>
+      <div class="seg" id="presets" role="group" aria-label="Casos de prueba">
+        <button type="button" data-p="c1" aria-pressed="true">Caso 1<small>Solución diluida, sin EPE</small></button>
+        <button type="button" data-p="c2" aria-pressed="false">Caso 2<small>Orgánica al vacío, con EPE</small></button>
+        <button type="button" data-p="own" aria-pressed="false">Datos propios<small>Conserva los valores y borra la referencia</small></button>
+      </div>
+      <p class="desc" id="pdesc"></p>
+      <span class="mod" id="modbadge" hidden></span>
+      <div class="fields" id="fields"></div>
+      <details class="adv" id="adv">
+        <summary>Propiedades fijadas a mano (opcional)</summary>
+        <p>Déjalas vacías para usar la tabla de vapor y c<sub>pF</sub>. Si llenas una, se usa tal cual. Útil cuando la entalpía del concentrado sale de una gráfica entalpía-concentración.</p>
+        <div class="fields" id="fieldsAdv"></div>
+      </details>
+    </aside>
+
+    <div class="out">
+      <div class="err" id="errors" role="alert" hidden></div>
+      <div id="results" style="display:grid; gap:34px">
+
+        <section aria-label="Indicadores clave">
+          <div class="kpis" id="kpis"></div>
+        </section>
+
+        <section>
+          <h2 class="sec">Validación contra la referencia</h2>
+          <p class="sec-note">Error relativo %E = |V<sub>ref</sub> − V<sub>sim</sub>| / V<sub>ref</sub> × 100. Los valores de referencia se pueden editar; escribe ahí lo que te dio Gemini o tu solución analítica para compararlo con esta página. Rúbrica: menos de 1 % excelente, de 1 a 5 % aceptable, más de 5 % deficiente.</p>
+          <div class="scroll"><table id="reft">
+            <thead><tr><th>Variable</th><th class="n">Simulador</th><th class="n">Referencia</th><th class="n">%E</th><th>Calificación</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </section>
+
+        <section>
+          <h2 class="sec">Secuencia de cálculo</h2>
+          <ol class="steps" id="steps"></ol>
+        </section>
+
+        <section>
+          <h2 class="sec">Balances de materia y energía</h2>
+          <p class="sec-note">Entalpías referidas a líquido a 0 °C. Energía = flujo × entalpía / 3600.</p>
+          <div class="scroll"><table id="bal"></table></div>
+        </section>
+
+        <section>
+          <h2 class="sec">Diagrama de proceso</h2>
+          <pre class="diag" id="diag" aria-label="Diagrama de bloques del evaporador"></pre>
+        </section>
+
+        <section>
+          <h2 class="sec">Interpretación y recomendaciones</h2>
+          <div class="notes" id="recs"></div>
+        </section>
+
+        <section>
+          <h2 class="sec">Sensibilidad: precalentamiento de la alimentación</h2>
+          <p class="sec-note">Se varía T<sub>F</sub> y se mantiene todo lo demás. La entalpía de alimentación se escala con la capacidad calorífica efectiva del caso actual.</p>
+          <div id="sensA"></div>
+        </section>
+
+        <section>
+          <h2 class="sec">Sensibilidad: nivel de vacío en la cámara</h2>
+          <p class="sec-note">Se varía P<sub>1</sub> con EPE y P<sub>S</sub> constantes. Un EPE constante es una simplificación: en la práctica cambia con la presión y la concentración.</p>
+          <div id="sensB"></div>
+        </section>
+
+        <section>
+          <h2 class="sec">Resumen para copiar</h2>
+          <div class="btnrow">
+            <button class="btn" type="button" id="copy">Copiar resumen</button>
+            <span class="fine" id="copyMsg" role="status"></span>
+          </div>
+          <textarea class="cp" id="cpbox" readonly hidden aria-label="Resumen de resultados"></textarea>
+        </section>
+
+        <section>
+          <details class="tab"><summary>Tabla de vapor saturado usada (agua, IAPWS-IF97)</summary>
+            <div class="scroll" style="margin-top:8px"><table id="steamt"></table></div>
+          </details>
+          <p class="fine" style="margin-top:14px">Herramienta didáctica. Las propiedades entre filas de la tabla se interpolan linealmente en ln P, lo que reproduce las tablas de vapor con diferencias de décimas de °C. Para entregas, contrasta los valores con la tabla oficial indicada por el profesor. Vapor sobrecalentado por EPE: H<sub>V</sub> = H<sub>g</sub>(P<sub>1</sub>) + 1.884·EPE.</p>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+// <solver>
+// Tabla de agua saturada: [P kPa abs, Tsat °C, hf kJ/kg, hg kJ/kg] (IAPWS-IF97)
+var STEAM=[[1,6.97,29.30,2513.7],[2,17.50,73.43,2532.9],[3,24.08,100.99,2544.9],[5,32.88,137.77,2560.8],[7.5,40.29,168.76,2574.1],[10,45.81,191.81,2583.9],[12.5,50.24,210.35,2591.7],[15,53.97,225.94,2598.3],[20,60.06,251.40,2608.9],[25,64.96,271.93,2617.4],[30,69.10,289.23,2624.6],[40,75.86,317.57,2636.1],[50,81.32,340.48,2645.2],[60,85.93,359.84,2652.9],[75,91.76,384.37,2662.4],[100,99.61,417.44,2674.9],[101.325,99.97,418.99,2675.5],[125,105.97,444.30,2684.9],[150,111.35,467.08,2693.1],[175,116.04,486.97,2700.1],[200,120.21,504.68,2706.2],[250,127.41,535.35,2716.5],[300,133.53,561.46,2724.9],[350,138.86,584.31,2732.0],[400,143.61,604.72,2738.1],[500,151.84,640.19,2748.1],[600,158.83,670.50,2756.1],[700,164.95,697.14,2762.7],[800,170.41,721.02,2768.3],[1000,179.89,762.68,2777.1]];
+
+function satProps(P){
+  if(!(P>=STEAM[0][0] && P<=STEAM[STEAM.length-1][0])) return null;
+  var k=0;
+  while(k<STEAM.length-2 && P>STEAM[k+1][0]) k++;
+  var a=STEAM[k], b=STEAM[k+1];
+  var t=Math.log(P/a[0])/Math.log(b[0]/a[0]);
+  var T=a[1]+t*(b[1]-a[1]), hf=a[2]+t*(b[2]-a[2]), hg=a[3]+t*(b[3]-a[3]);
+  return {T:T, hf:hf, hg:hg, hfg:hg-hf};
+}
+
+function balance(b){
+  var S=(b.L*b.hL+b.V*b.HV-b.F*b.hF)/b.lamS;
+  var qkW=S*b.lamS/3600;
+  var A=qkW*1000/(b.U*b.dT);
+  return {S:S, qkW:qkW, A:A, E:b.V/S};
+}
+
+var NAMES={F:'la alimentación F',xF:'x_F',xL:'x_L',TF:'T_F',P1:'P_1',EPE:'el EPE',PS:'P_S',U:'U'};
+
+function solveBase(i){
+  var err=[], k;
+  var req=['F','xF','xL','TF','P1','EPE','PS','U'];
+  for(k=0;k<req.length;k++){
+    var v=i[req[k]];
+    if(v===null||v===undefined) err.push('Falta '+NAMES[req[k]]+'.');
+    else if(!isFinite(v)) err.push('El valor de '+NAMES[req[k]]+' no es un número.');
+  }
+  var opt=['cpF','cpL','hF','hL','HV','lamS'];
+  for(k=0;k<opt.length;k++){ if(i[opt[k]]!==null && i[opt[k]]!==undefined && !isFinite(i[opt[k]])) err.push('El valor de '+opt[k]+' no es un número.'); }
+  if(err.length) return {ok:false, err:err};
+  if(!(i.F>0)) err.push('F debe ser mayor que 0.');
+  if(!(i.xF>0 && i.xF<1)) err.push('x_F debe estar entre 0 y 1 (fracción masa).');
+  if(!(i.xL>i.xF && i.xL<=1)) err.push('x_L debe ser mayor que x_F y no pasar de 1.');
+  if(!(i.U>0)) err.push('U debe ser mayor que 0.');
+  if(i.EPE<0) err.push('El EPE no puede ser negativo.');
+  var sat1=satProps(i.P1), satS=satProps(i.PS);
+  if(!sat1) err.push('P_1 está fuera de la tabla de vapor (1 a 1000 kPa abs).');
+  if(!satS) err.push('P_S está fuera de la tabla de vapor (1 a 1000 kPa abs).');
+  if(err.length) return {ok:false, err:err};
+
+  var T1=sat1.T+i.EPE, Ts=satS.T, dT=Ts-T1;
+  if(!(dT>0)) return {ok:false, err:['La temperatura del vapor de calentamiento ('+Ts.toFixed(1)+' °C) debe ser mayor que la de ebullición T_1 ('+T1.toFixed(1)+' °C). Sube P_S o baja P_1.']};
+
+  var hasHF=(i.hF!==null && i.hF!==undefined), hasCpF=(i.cpF!==null && i.cpF!==undefined);
+  if(!hasHF && !hasCpF) return {ok:false, err:['Indica c_pF o fija h_F en las propiedades manuales.']};
+  var hF=hasHF? i.hF : i.cpF*i.TF;
+  var cpFeff=hasCpF? i.cpF : (i.TF!==0? hF/i.TF : null);
+  var hL, cpLeff, hLsrc;
+  if(i.hL!==null && i.hL!==undefined){ hL=i.hL; cpLeff=hL/T1; hLsrc='valor fijado'; }
+  else{
+    var cpL=(i.cpL!==null && i.cpL!==undefined)? i.cpL : cpFeff;
+    if(cpL===null) return {ok:false, err:['No hay c_p para calcular h_L: indica c_pL, c_pF o fija h_L.']};
+    hL=cpL*T1; cpLeff=cpL; hLsrc=(i.cpL!==null && i.cpL!==undefined)?'c_pL·T_1':(hasCpF?'c_pF·T_1':'c_p equivalente·T_1');
+  }
+  var HVauto=sat1.hg+1.884*i.EPE;
+  var hasHV=(i.HV!==null && i.HV!==undefined);
+  var HV=hasHV? i.HV : HVauto;
+  var hasLam=(i.lamS!==null && i.lamS!==undefined);
+  var lamS=hasLam? i.lamS : satS.hfg;
+  var L=i.F*i.xF/i.xL, V=i.F-L;
+  var bal=balance({F:i.F,L:L,V:V,hF:hF,hL:hL,HV:HV,lamS:lamS,U:i.U,dT:dT});
+  if(!(bal.S>0)) return {ok:false, err:['El vapor de calentamiento sale negativo o cero: con estos datos la alimentación ya aporta más calor del que se necesita. Revisa T_F y las entalpías.']};
+  var Qsens=(cpFeff!==null && i.TF<T1)? i.F*cpFeff*(T1-i.TF)/3600 : null;
+  return {
+    ok:true, i:i, L:L, V:V, sat1:sat1, satS:satS, T1:T1, Ts:Ts, dT:dT,
+    hF:hF, hL:hL, HV:HV, lamS:lamS, cpFeff:cpFeff, cpLeff:cpLeff, dHV:HV-HVauto,
+    hFsrc:hasHF?'valor fijado':'c_pF·T_F', hLsrc:hLsrc, HVsrc:hasHV?'valor fijado':'H_g(P_1) + 1.884·EPE', lamsrc:hasLam?'valor fijado':'h_fg(P_S)',
+    S:bal.S, qkW:bal.qkW, qW:bal.qkW*1000, A:bal.A, E:bal.E, Qsens:Qsens
+  };
+}
+
+function sweepTF(i,r){
+  if(r.cpFeff===null) return null;
+  var hi=Math.min(r.T1-5,95), lo=Math.max(0,Math.min(10,hi-10));
+  if(!(hi>lo)) return null;
+  var xs=[], n=7, j;
+  for(j=0;j<=n;j++) xs.push(lo+(hi-lo)*j/n);
+  if(i.TF>=lo && i.TF<=r.T1) xs.push(i.TF);
+  xs.sort(function(a,b){return a-b;});
+  var pts=[];
+  xs.forEach(function(x){
+    if(pts.length && Math.abs(x-pts[pts.length-1].TF)<0.3) return;
+    var hF=r.cpFeff*x;
+    var b=balance({F:i.F,L:r.L,V:r.V,hF:hF,hL:r.hL,HV:r.HV,lamS:r.lamS,U:i.U,dT:r.dT});
+    pts.push({TF:x,hF:hF,S:b.S,E:b.E,qkW:b.qkW,A:b.A,base:Math.abs(x-i.TF)<1e-9});
+  });
+  return pts;
+}
+
+function sweepP1(i,r){
+  var cands=[5,10,15,20,30,40,50,75,100,125,150,200], pts=[], k;
+  var list=cands.filter(function(p){ return Math.abs(p-i.P1)/i.P1>0.03; });
+  list.push(i.P1);
+  list.sort(function(a,b){return a-b;});
+  for(k=0;k<list.length;k++){
+    var p=list[k], s=satProps(p);
+    if(!s) continue;
+    var T1=s.T+i.EPE, dT=r.Ts-T1;
+    if(!(dT>0.5) && p!==i.P1) continue;
+    var hL=r.cpLeff*T1, HV=s.hg+1.884*i.EPE+r.dHV;
+    var b=balance({F:i.F,L:r.L,V:r.V,hF:r.hF,hL:hL,HV:HV,lamS:r.lamS,U:i.U,dT:dT});
+    pts.push({P1:p,Tsat:s.T,T1:T1,dT:dT,S:b.S,E:b.E,qkW:b.qkW,A:b.A,base:p===i.P1});
+  }
+  return pts.length>=3? pts : null;
+}
+// </solver>
+
+/* ---------- Interfaz ---------- */
+function $(id){ return document.getElementById(id); }
+function f(x,d){
+  if(d===undefined) d=1;
+  if(x===null||x===undefined||!isFinite(x)) return '—';
+  return x.toLocaleString('es-MX',{minimumFractionDigits:d,maximumFractionDigits:d});
+}
+
+var FIELDS=[
+  {id:'F',  l:'Alimentación <i>F</i>', u:'kg/h'},
+  {id:'xF', l:'Sólidos en la alimentación <i>x<sub>F</sub></i>', u:'fr. masa'},
+  {id:'xL', l:'Sólidos en el concentrado <i>x<sub>L</sub></i>', u:'fr. masa'},
+  {id:'TF', l:'Temperatura de alimentación <i>T<sub>F</sub></i>', u:'°C'},
+  {id:'cpF',l:'Capacidad calorífica <i>c<sub>pF</sub></i>', u:'kJ/kg·K'},
+  {id:'P1', l:'Presión de la cámara <i>P<sub>1</sub></i>', u:'kPa abs'},
+  {id:'EPE',l:'Elevación del punto de ebullición <i>EPE</i>', u:'°C'},
+  {id:'PS', l:'Presión del vapor de calentamiento <i>P<sub>S</sub></i>', u:'kPa abs'},
+  {id:'U',  l:'Coeficiente global <i>U</i>', u:'W/m²·K'}
+];
+var ADV=[
+  {id:'cpL',l:'Capacidad calorífica del concentrado <i>c<sub>pL</sub></i>', u:'kJ/kg·K'},
+  {id:'hF', l:'Entalpía de la alimentación <i>h<sub>F</sub></i>', u:'kJ/kg'},
+  {id:'hL', l:'Entalpía del concentrado <i>h<sub>L</sub></i>', u:'kJ/kg'},
+  {id:'HV', l:'Entalpía del vapor generado <i>H<sub>V</sub></i>', u:'kJ/kg'},
+  {id:'lamS',l:'Calor latente del vapor <i>λ<sub>S</sub></i>', u:'kJ/kg'}
+];
+var ALL=FIELDS.concat(ADV).map(function(x){return x.id;});
+
+var PRESETS={
+  c1:{name:'Caso 1', desc:'Concentración de solución salina a presión atmosférica.',
+      v:{F:9072,xF:0.01,xL:0.015,TF:37.8,cpF:4.14,P1:101.325,EPE:0,PS:143.3,U:1704,cpL:null,hF:null,hL:null,HV:null,lamS:null},
+      ref:{L:6048,V:3024,S:4108,q:2544,A:149.3,E:0.736}},
+  c2:{name:'Caso 2', desc:'Concentración de extracto orgánico al vacío con ebullición elevada. Las entalpías h_F, h_L y H_V vienen de la guía.',
+      v:{F:4536,xF:0.20,xL:0.50,TF:60,cpF:null,P1:11.7,EPE:40.6,PS:172.4,U:1560,cpL:null,hF:214,hL:514,HV:2667,lamS:null},
+      ref:{L:1814.4,V:2721.6,S:3255,q:2002,A:49.2,E:0.836}}
+};
+var REFROWS=[
+  {k:'L',l:'L, concentrado',u:'kg/h',d:1,g:function(r){return r.L;}},
+  {k:'V',l:'V, vapor generado',u:'kg/h',d:1,g:function(r){return r.V;}},
+  {k:'S',l:'S, vapor de calentamiento',u:'kg/h',d:1,g:function(r){return r.S;}},
+  {k:'q',l:'q, carga térmica',u:'kW',d:0,g:function(r){return r.qkW;}},
+  {k:'A',l:'A, área de transferencia',u:'m²',d:1,g:function(r){return r.A;}},
+  {k:'E',l:'E, economía de vapor',u:'kg/kg',d:3,g:function(r){return r.E;}}
+];
+
+var current='c1', last=null;
+
+function buildFields(){
+  function mk(list){
+    return list.map(function(x){
+      return '<div class="field"><label for="in_'+x.id+'">'+x.l+'</label><div class="box"><input id="in_'+x.id+'" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"><span>'+x.u+'</span></div></div>';
+    }).join('');
+  }
+  $('fields').innerHTML=mk(FIELDS);
+  $('fieldsAdv').innerHTML=mk(ADV);
+  ALL.forEach(function(id){ $('in_'+id).addEventListener('input',update); });
+  $('in_cpF').placeholder='opcional si fijas h_F';
+  var tb=$('reft').querySelector('tbody');
+  tb.innerHTML=REFROWS.map(function(r){
+    return '<tr><td>'+r.l+' <span class="fine">('+r.u+')</span></td><td class="n" id="sim_'+r.k+'">—</td><td class="n"><input id="ref_'+r.k+'" type="text" inputmode="decimal" autocomplete="off" aria-label="Referencia de '+r.l+'"></td><td class="n" id="err_'+r.k+'">—</td><td id="cls_'+r.k+'"></td></tr>';
+  }).join('');
+  REFROWS.forEach(function(r){ $('ref_'+r.k).addEventListener('input',function(){ if(last) updateRefs(last); }); });
+  $('steamt').innerHTML='<thead><tr><th class="n">P (kPa abs)</th><th class="n">T sat (°C)</th><th class="n">h<sub>f</sub> (kJ/kg)</th><th class="n">H<sub>g</sub> (kJ/kg)</th><th class="n">h<sub>fg</sub> (kJ/kg)</th></tr></thead><tbody>'+
+    STEAM.map(function(r){ return '<tr><td class="n">'+r[0]+'</td><td class="n">'+f(r[1],2)+'</td><td class="n">'+f(r[2],1)+'</td><td class="n">'+f(r[3],1)+'</td><td class="n">'+f(r[3]-r[2],1)+'</td></tr>'; }).join('')+'</tbody>';
+}
+
+function setVal(id,v){ $(id).value=(v===null||v===undefined)?'':String(v); }
+function readInputs(){
+  var o={};
+  ALL.forEach(function(k){
+    var s=$('in_'+k).value.trim().replace(',','.');
+    o[k]= s===''? null : Number(s);
+    if(o[k]!==null && !isFinite(o[k])) o[k]=NaN;
+  });
+  return o;
+}
+function readRef(k){
+  var s=$('ref_'+k).value.trim().replace(',','.');
+  if(s==='') return null;
+  var v=Number(s);
+  return isFinite(v)? v : null;
+}
+
+function applyPreset(key){
+  current=key;
+  var btns=$('presets').querySelectorAll('button');
+  for(var b=0;b<btns.length;b++) btns[b].setAttribute('aria-pressed', btns[b].getAttribute('data-p')===key?'true':'false');
+  if(key==='own'){
+    REFROWS.forEach(function(r){ setVal('ref_'+r.k,null); });
+    $('pdesc').textContent='Edita los datos libremente. Escribe valores de referencia en la tabla de validación si quieres compararlos.';
+  }else{
+    var p=PRESETS[key];
+    ALL.forEach(function(id){ setVal('in_'+id,p.v[id]); });
+    REFROWS.forEach(function(r){ setVal('ref_'+r.k,p.ref[r.k]); });
+    $('pdesc').textContent=p.desc;
+    $('adv').open = (key==='c2');
+  }
+  update();
+}
+
+function renderModified(inp){
+  var badge=$('modbadge');
+  if(current==='own'){ badge.hidden=true; return; }
+  var p=PRESETS[current], diff=false;
+  ALL.forEach(function(id){
+    var a=inp[id], b=p.v[id];
+    if(a===null && b===null) return;
+    if(a===null || b===null || Math.abs(a-b)>1e-12) diff=true;
+  });
+  badge.hidden=!diff;
+  if(diff) badge.textContent='Datos modificados respecto al '+p.name;
+}
+
+function showErrors(list){
+  var e=$('errors');
+  e.hidden=false;
+  e.innerHTML='<strong>Revisa los datos de entrada</strong><ul>'+list.map(function(x){return '<li>'+x.replace(/_([A-Za-z0-9]+)/g,'<sub>$1</sub>')+'</li>';}).join('')+'</ul>';
+  $('results').classList.add('pending');
+}
+function hideErrors(){ $('errors').hidden=true; $('results').classList.remove('pending'); }
+
+function renderKPIs(r){
+  var k=[
+    {l:'Área A',v:f(r.A,1),u:'m²',hot:true},
+    {l:'Vapor S',v:f(r.S,0),u:'kg/h',hot:false},
+    {l:'Carga térmica q',v:f(r.qkW,0),u:'kW',hot:false},
+    {l:'Coeficiente U',v:f(r.i.U,0),u:'W/m²·K',hot:false},
+    {l:'Economía E',v:f(r.E,3),u:'kg vapor / kg vapor',hot:true}
+  ];
+  $('kpis').innerHTML=k.map(function(x){ return '<div class="kpi'+(x.hot?' hot':'')+'"><div class="l">'+x.l+'</div><div class="v">'+x.v+'</div><div class="u">'+x.u+'</div></div>'; }).join('');
+}
+
+function rubric(e){
+  if(e<1) return ['Excelente','good'];
+  if(e<=5) return ['Aceptable','warn'];
+  return ['Deficiente','crit'];
+}
+function updateRefs(r){
+  REFROWS.forEach(function(row){
+    var sim=row.g(r), ref=readRef(row.k);
+    $('sim_'+row.k).textContent=f(sim,row.d===0?0:row.d);
+    if(ref===null||ref===0){
+      $('err_'+row.k).textContent='—'; $('cls_'+row.k).innerHTML='';
+    }else{
+      var e=Math.abs(ref-sim)/Math.abs(ref)*100, c=rubric(e);
+      $('err_'+row.k).textContent=f(e,2)+' %';
+      $('cls_'+row.k).innerHTML='<span class="pill '+c[1]+'">'+c[0]+'</span>';
+    }
+  });
+}
+
+function renderSteps(r){
+  var i=r.i;
+  var s=[];
+  s.push({t:'Balance global de materia y de soluto',
+    c:'L = F·x<sub>F</sub> / x<sub>L</sub> = '+f(i.F,1)+' × '+f(i.xF,4)+' / '+f(i.xL,4)+' = <b>'+f(r.L,1)+' kg/h</b><br>V = F − L = '+f(i.F,1)+' − '+f(r.L,1)+' = <b>'+f(r.V,1)+' kg/h</b>'});
+  s.push({t:'Temperaturas de ebullición y fuerza motriz',
+    c:'T<sub>sat</sub>(P<sub>1</sub> = '+f(i.P1,3)+' kPa) = '+f(r.sat1.T,2)+' °C<br>T<sub>1</sub> = T<sub>sat</sub> + EPE = '+f(r.sat1.T,2)+' + '+f(i.EPE,1)+' = <b>'+f(r.T1,2)+' °C</b><br>T<sub>S</sub> = T<sub>sat</sub>(P<sub>S</sub> = '+f(i.PS,1)+' kPa) = <b>'+f(r.Ts,2)+' °C</b><br>ΔT = T<sub>S</sub> − T<sub>1</sub> = <b>'+f(r.dT,2)+' °C</b>'});
+  s.push({t:'Entalpías específicas',
+    c:'h<sub>F</sub> = '+f(r.hF,1)+' kJ/kg <em>('+r.hFsrc.replace(/_([A-Za-z0-9]+)/g,'<sub>$1</sub>')+')</em><br>h<sub>L</sub> = '+f(r.hL,1)+' kJ/kg <em>('+r.hLsrc.replace(/_([A-Za-z0-9]+)/g,'<sub>$1</sub>')+')</em><br>H<sub>V</sub> = '+f(r.HV,1)+' kJ/kg <em>('+r.HVsrc.replace(/_([A-Za-z0-9]+)/g,'<sub>$1</sub>').replace('(P1)','(P<sub>1</sub>)')+')</em><br>λ<sub>S</sub> = '+f(r.lamS,1)+' kJ/kg <em>('+r.lamsrc.replace(/_([A-Za-z0-9]+)/g,'<sub>$1</sub>')+')</em>'});
+  s.push({t:'Balance de energía: vapor requerido y calor',
+    c:'S = (L·h<sub>L</sub> + V·H<sub>V</sub> − F·h<sub>F</sub>) / λ<sub>S</sub><br>S = ('+f(r.L,1)+'·'+f(r.hL,1)+' + '+f(r.V,1)+'·'+f(r.HV,1)+' − '+f(i.F,1)+'·'+f(r.hF,1)+') / '+f(r.lamS,1)+' = <b>'+f(r.S,1)+' kg/h</b><br>q = S·λ<sub>S</sub> / 3600 = <b>'+f(r.qkW,1)+' kW</b> = '+f(r.qW,0)+' W'});
+  s.push({t:'Área de transferencia de calor',
+    c:'A = q / (U·ΔT) = '+f(r.qW,0)+' / ('+f(i.U,0)+' × '+f(r.dT,2)+') = <b>'+f(r.A,1)+' m²</b>'});
+  s.push({t:'Economía de vapor',
+    c:'E = V / S = '+f(r.V,1)+' / '+f(r.S,1)+' = <b>'+f(r.E,3)+' kg/kg</b>'});
+  $('steps').innerHTML=s.map(function(x){ return '<li><div><h3>'+x.t+'</h3><div class="calc">'+x.c+'</div></div></li>'; }).join('');
+}
+
+function renderBalance(r){
+  var i=r.i;
+  var hSv=r.satS.hf+r.lamS, hSl=r.satS.hf;
+  function kw(m,h){ return m*h/3600; }
+  var rows=[
+    ['F, alimentación',i.F,i.xF,i.TF,r.hF,kw(i.F,r.hF),'in'],
+    ['S, vapor de calentamiento',r.S,0,r.Ts,hSv,kw(r.S,hSv),'in'],
+    ['L, concentrado',r.L,i.xL,r.T1,r.hL,kw(r.L,r.hL),'out'],
+    ['V, vapor generado'+(i.EPE>0?' (sobrecalentado)':''),r.V,0,r.T1,r.HV,kw(r.V,r.HV),'out'],
+    ['Condensado de S',r.S,0,r.Ts,hSl,kw(r.S,hSl),'out']
+  ];
+  var ein=rows[0][5]+rows[1][5], eout=rows[2][5]+rows[3][5]+rows[4][5];
+  var h='<thead><tr><th>Corriente</th><th>Sentido</th><th class="n">Flujo (kg/h)</th><th class="n">x sólidos</th><th class="n">T (°C)</th><th class="n">h (kJ/kg)</th><th class="n">Energía (kW)</th></tr></thead><tbody>';
+  rows.forEach(function(x){
+    h+='<tr><td>'+x[0]+'</td><td>'+(x[6]==='in'?'entra':'sale')+'</td><td class="n">'+f(x[1],1)+'</td><td class="n">'+f(x[2],4)+'</td><td class="n">'+f(x[3],1)+'</td><td class="n">'+f(x[4],1)+'</td><td class="n">'+f(x[5],1)+'</td></tr>';
+  });
+  h+='<tr><td><strong>Materia</strong></td><td></td><td class="n">'+f(i.F,1)+' = '+f(r.L,1)+' + '+f(r.V,1)+'</td><td class="n" colspan="2">F·x<sub>F</sub> = L·x<sub>L</sub> = '+f(i.F*i.xF,2)+' kg/h</td><td></td><td></td></tr>';
+  h+='<tr><td><strong>Energía</strong></td><td></td><td class="n" colspan="4">Entra '+f(ein,1)+' kW, sale '+f(eout,1)+' kW</td><td class="n">Δ = '+f(ein-eout,2)+'</td></tr></tbody>';
+  $('bal').innerHTML=h;
+}
+
+function renderDiagram(r){
+  var i=r.i, inner=23;
+  function ctr(t){ var n=inner-t.length; if(n<0) return t.slice(0,inner); var a=Math.floor(n/2); return ' '.repeat(a)+t+' '.repeat(n-a); }
+  var Lc=[
+    ['S = '+f(r.S,1)+' kg/h',''],
+    ['Ts = '+f(r.Ts,1)+' C ----->',''],
+    ['',''],
+    ['F = '+f(i.F,1)+' kg/h',''],
+    ['TF = '+f(i.TF,1)+' C ----->',''],
+    ['xF = '+f(i.xF,4),'']
+  ];
+  var left=0; Lc.forEach(function(x){ if(x[0].length>left) left=x[0].length; }); left+=1;
+  function lp(t,arrow){ return t===''?' '.repeat(left):(arrow? t.padStart(left) : (' '+t).padEnd(left)); }
+  var mid=left+12, sp=function(n){return ' '.repeat(n);};
+  var top='+'+'-'.repeat(11)+'+'+'-'.repeat(11)+'+', bot=top;
+  var L=[];
+  L.push(sp(left+2)+'V = '+f(r.V,1)+' kg/h');
+  L.push(sp(left+2)+'T1 = '+f(r.T1,1)+' C   HV = '+f(r.HV,0)+' kJ/kg');
+  L.push(sp(mid)+'^'); L.push(sp(mid)+'|');
+  L.push(sp(left)+top);
+  L.push(lp(Lc[0][0],false)+'|'+ctr('')+'|');
+  L.push(lp(Lc[1][0],true)+'|'+ctr('EVAPORADOR')+'|-----> L = '+f(r.L,1)+' kg/h');
+  L.push(lp('',false)+'|'+ctr('UN SOLO EFECTO')+'|        xL = '+f(i.xL,4));
+  L.push(lp(Lc[3][0],false)+'|'+ctr('A = '+f(r.A,1)+' m2')+'|        hL = '+f(r.hL,0)+' kJ/kg');
+  L.push(lp(Lc[4][0],true)+'|'+ctr('')+'|');
+  L.push(lp(Lc[5][0],false)+'|'+ctr('')+'|');
+  L.push(sp(left)+bot);
+  L.push(sp(mid)+'|'); L.push(sp(mid)+'v');
+  L.push(sp(left+2)+'Condensado: S = '+f(r.S,1)+' kg/h');
+  L.push(sp(left+2)+'T = '+f(r.Ts,1)+' C   hf = '+f(r.satS.hf,0)+' kJ/kg');
+  $('diag').textContent=L.join('\n');
+}
+
+function renderRecs(r,swT,swP){
+  var i=r.i, p=[];
+  p.push('<p><strong>Economía de vapor.</strong> E = '+f(r.E,3)+' kg/kg: cada kilogramo de vapor de calentamiento evapora '+f(r.E,2)+' kg de agua. '+(r.E>1?'Un valor mayor que 1 en un solo efecto solo aparece si la alimentación entra por encima de la temperatura de ebullición; si no es tu caso, revisa los datos y las entalpías fijadas a mano.':'En un solo efecto el valor queda cerca de 1. Con N efectos en serie la economía sube de forma aproximada N veces, a cambio de más área y más equipo; conviene evaluarlo si el costo del vapor pesa en el proceso.')+'</p>');
+  if(r.Qsens!==null){
+    var pct=r.Qsens/r.qkW*100;
+    var extra='';
+    if(swT){ var a=swT[0], b=swT[swT.length-1]; var slope=(b.S-a.S)/(b.TF-a.TF)*10; extra=' En la curva de sensibilidad, cada +10 °C en T<sub>F</sub> cambia S en unos '+f(slope,0)+' kg/h.'; }
+    p.push('<p><strong>Precalentamiento.</strong> Unos '+f(r.Qsens,0)+' kW, el '+f(pct,0)+' % de la carga térmica, se gastan en llevar la alimentación de '+f(i.TF,1)+' a '+f(r.T1,1)+' °C antes de que empiece a evaporar. Precalentarla con el condensado o con parte del vapor generado reduce el consumo de vapor vivo.'+extra+'</p>');
+  }else{
+    p.push('<p><strong>Alimentación caliente.</strong> La alimentación entra a '+f(i.TF,1)+' °C, a T<sub>1</sub> o por encima. En ese caso no hay calor sensible que aportar y parte del líquido se evapora de golpe (flash) al entrar a la cámara.</p>');
+  }
+  if(i.EPE>0){
+    var dTot=r.Ts-r.sat1.T, loss=i.EPE/dTot*100;
+    p.push('<p><strong>Elevación del punto de ebullición.</strong> Con EPE = '+f(i.EPE,1)+' °C se pierde el '+f(loss,0)+' % de la diferencia de temperatura disponible ('+f(dTot,1)+' °C entre el vapor y el agua pura a P<sub>1</sub>), y queda ΔT = '+f(r.dT,1)+' °C. Como A es inversamente proporcional a ΔT, un EPE alto encarece el área. Concentrar menos, o subir P<sub>S</sub> si el material de la superficie y el producto lo toleran, recupera fuerza motriz.</p>');
+  }else{
+    p.push('<p><strong>Fuerza motriz.</strong> Sin EPE, ΔT = '+f(r.dT,1)+' °C. Si ΔT es pequeño el área crece rápido (A ∝ 1/ΔT); una pequeña subida de P<sub>S</sub> o una baja de P<sub>1</sub> la reduce de forma notable.</p>');
+  }
+  if(swP){
+    var lo=swP[0], hi=swP[swP.length-1];
+    p.push('<p><strong>Vacío.</strong> En el rango analizado, bajar P<sub>1</sub> de '+f(hi.P1,1)+' a '+f(lo.P1,1)+' kPa baja T<sub>1</sub> de '+f(hi.T1,1)+' a '+f(lo.T1,1)+' °C y cambia el área de '+f(hi.A,1)+' a '+f(lo.A,1)+' m². Para soluciones biológicas termosensibles, operar a menor T<sub>1</sub> reduce la degradación del producto; el costo es el sistema de vacío y vapor de mayor volumen específico.</p>');
+  }
+  p.push('<p><strong>Diseño y operación.</strong> El área calculada supone U constante y superficie limpia. Verifica U con datos de planta y considera un margen de diseño por ensuciamiento. El condensado sale a '+f(r.Ts,1)+' °C con '+f(r.satS.hf,0)+' kJ/kg: devolverlo a la caldera o usarlo para precalentar la alimentación recupera parte de esa energía.</p>');
+  $('recs').innerHTML=p.join('');
+}
+
+/* ---------- Gráficas ---------- */
+function niceTicks(min,max,count){
+  var span=(max-min)||1, raw=span/count, mag=Math.pow(10,Math.floor(Math.log10(raw))), nm=raw/mag;
+  var step=(nm<1.5?1:nm<3?2:nm<7?5:10)*mag;
+  var start=Math.floor(min/step+1e-9)*step, end=Math.ceil(max/step-1e-9)*step, t=[];
+  for(var v=start; v<=end+step/2; v+=step) t.push(Math.round(v*1e9)/1e9);
+  return t;
+}
+function tickDec(t){ var s=t[1]-t[0]; return Math.max(0,Math.ceil(-Math.log10(s)+1e-9)); }
+function chart(o){
+  var W=440,H=270,m={l:60,r:18,t:16,b:46};
+  var xs=o.pts.map(function(p){return p[0];}), ys=o.pts.map(function(p){return p[1];});
+  var xt=niceTicks(Math.min.apply(null,xs),Math.max.apply(null,xs),5), yt=niceTicks(Math.min.apply(null,ys),Math.max.apply(null,ys),5);
+  var x0=xt[0], x1=xt[xt.length-1], y0=yt[0], y1=yt[yt.length-1];
+  var xd=tickDec(xt), yd=tickDec(yt);
+  function X(v){ return m.l+(v-x0)/(x1-x0)*(W-m.l-m.r); }
+  function Y(v){ return H-m.b-(v-y0)/(y1-y0)*(H-m.t-m.b); }
+  var g='';
+  yt.forEach(function(v){ g+='<line class="grid" x1="'+m.l+'" x2="'+(W-m.r)+'" y1="'+Y(v).toFixed(1)+'" y2="'+Y(v).toFixed(1)+'"/><text x="'+(m.l-7)+'" y="'+(Y(v)+4).toFixed(1)+'" text-anchor="end">'+f(v,yd)+'</text>'; });
+  xt.forEach(function(v){ g+='<line class="grid" y1="'+m.t+'" y2="'+(H-m.b)+'" x1="'+X(v).toFixed(1)+'" x2="'+X(v).toFixed(1)+'"/><text x="'+X(v).toFixed(1)+'" y="'+(H-m.b+16)+'" text-anchor="middle">'+f(v,xd)+'</text>'; });
+  g+='<line class="axis" x1="'+m.l+'" x2="'+(W-m.r)+'" y1="'+(H-m.b)+'" y2="'+(H-m.b)+'"/><line class="axis" x1="'+m.l+'" x2="'+m.l+'" y1="'+m.t+'" y2="'+(H-m.b)+'"/>';
+  var path=o.pts.map(function(p,k){ return (k?'L':'M')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1); }).join(' ');
+  g+='<path class="ln" d="'+path+'"/>';
+  o.pts.forEach(function(p){ if(!p[2]) g+='<circle class="pt" r="3.2" cx="'+X(p[0]).toFixed(1)+'" cy="'+Y(p[1]).toFixed(1)+'"/>'; });
+  o.pts.forEach(function(p){
+    if(p[2]){
+      var cx=X(p[0]), cy=Y(p[1]), right=cx>W-90;
+      g+='<circle class="bs" r="5.5" cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'"/><text class="t" x="'+(right?cx-10:cx+10).toFixed(1)+'" y="'+(cy-9).toFixed(1)+'" text-anchor="'+(right?'end':'start')+'">caso actual</text>';
+    }
+  });
+  g+='<text x="'+((m.l+W-m.r)/2)+'" y="'+(H-8)+'" text-anchor="middle">'+o.xl+'</text><text transform="rotate(-90 14 '+((m.t+H-m.b)/2)+')" x="14" y="'+((m.t+H-m.b)/2)+'" text-anchor="middle">'+o.yl+'</text>';
+  return '<figure><figcaption>'+o.title+'</figcaption><svg class="ch" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+o.title+'"><title>'+o.title+'</title>'+g+'</svg></figure>';
+}
+
+function renderSens(r,swT,swP){
+  var a='', b='';
+  if(!swT){ a='<p class="fine">No hay datos suficientes para esta curva (hace falta c<sub>pF</sub> o una h<sub>F</sub> con T<sub>F</sub> distinta de 0).</p>'; }
+  else{
+    var s0=swT[0], s1=swT[swT.length-1];
+    a='<div class="charts">'+chart({title:'Vapor de calentamiento S contra T<sub>F</sub>'.replace(/<\/?sub>/g,''),xl:'TF (°C)',yl:'S (kg/h)',pts:swT.map(function(p){return [p.TF,p.S,p.base];})})+
+      chart({title:'Carga térmica q contra TF',xl:'TF (°C)',yl:'q (kW)',pts:swT.map(function(p){return [p.TF,p.qkW,p.base];})})+'</div>'+
+      '<p class="sec-note" style="margin-top:0">Al pasar T<sub>F</sub> de '+f(s0.TF,1)+' a '+f(s1.TF,1)+' °C, S baja de '+f(s0.S,0)+' a '+f(s1.S,0)+' kg/h ('+f((s1.S-s0.S)/s0.S*100,1)+' %) y E sube de '+f(s0.E,3)+' a '+f(s1.E,3)+'.</p>'+
+      '<div class="scroll"><table><thead><tr><th class="n">T<sub>F</sub> (°C)</th><th class="n">h<sub>F</sub> (kJ/kg)</th><th class="n">S (kg/h)</th><th class="n">q (kW)</th><th class="n">A (m²)</th><th class="n">E</th></tr></thead><tbody>'+
+      swT.map(function(p){ return '<tr'+(p.base?' class="base"':'')+'><td class="n">'+f(p.TF,1)+'</td><td class="n">'+f(p.hF,1)+'</td><td class="n">'+f(p.S,0)+'</td><td class="n">'+f(p.qkW,0)+'</td><td class="n">'+f(p.A,1)+'</td><td class="n">'+f(p.E,3)+'</td></tr>'; }).join('')+'</tbody></table></div>';
+  }
+  $('sensA').innerHTML=a;
+  if(!swP){ b='<p class="fine">No hay un rango de P<sub>1</sub> válido para esta curva con el P<sub>S</sub> y el EPE actuales.</p>'; }
+  else{
+    var v0=swP[0], v1=swP[swP.length-1];
+    b='<div class="charts">'+chart({title:'Temperatura de ebullición T1 contra P1',xl:'P1 (kPa abs)',yl:'T1 (°C)',pts:swP.map(function(p){return [p.P1,p.T1,p.base];})})+
+      chart({title:'Área requerida A contra P1',xl:'P1 (kPa abs)',yl:'A (m²)',pts:swP.map(function(p){return [p.P1,p.A,p.base];})})+'</div>'+
+      '<p class="sec-note" style="margin-top:0">Con más vacío, de P<sub>1</sub> = '+f(v1.P1,1)+' a '+f(v0.P1,1)+' kPa, T<sub>1</sub> baja de '+f(v1.T1,1)+' a '+f(v0.T1,1)+' °C, ΔT sube de '+f(v1.dT,1)+' a '+f(v0.dT,1)+' °C y A pasa de '+f(v1.A,1)+' a '+f(v0.A,1)+' m².</p>'+
+      '<div class="scroll"><table><thead><tr><th class="n">P<sub>1</sub> (kPa)</th><th class="n">T<sub>sat</sub> (°C)</th><th class="n">T<sub>1</sub> (°C)</th><th class="n">ΔT (°C)</th><th class="n">S (kg/h)</th><th class="n">A (m²)</th><th class="n">E</th></tr></thead><tbody>'+
+      swP.map(function(p){ return '<tr'+(p.base?' class="base"':'')+'><td class="n">'+f(p.P1,p.P1%1?3:1)+'</td><td class="n">'+f(p.Tsat,1)+'</td><td class="n">'+f(p.T1,1)+'</td><td class="n">'+f(p.dT,1)+'</td><td class="n">'+f(p.S,0)+'</td><td class="n">'+f(p.A,1)+'</td><td class="n">'+f(p.E,3)+'</td></tr>'; }).join('')+'</tbody></table></div>';
+  }
+  $('sensB').innerHTML=b;
+}
+
+function summaryText(r){
+  var i=r.i;
+  var t=[];
+  t.push('Evaporador de un solo efecto, resultados del simulador');
+  t.push('Entradas: F = '+f(i.F,1)+' kg/h, xF = '+f(i.xF,4)+', xL = '+f(i.xL,4)+', TF = '+f(i.TF,1)+' C, P1 = '+f(i.P1,3)+' kPa, EPE = '+f(i.EPE,1)+' C, PS = '+f(i.PS,1)+' kPa, U = '+f(i.U,0)+' W/m2K');
+  t.push('L = '+f(r.L,1)+' kg/h');
+  t.push('V = '+f(r.V,1)+' kg/h');
+  t.push('T1 = '+f(r.T1,2)+' C, TS = '+f(r.Ts,2)+' C, DT = '+f(r.dT,2)+' C');
+  t.push('hF = '+f(r.hF,1)+', hL = '+f(r.hL,1)+', HV = '+f(r.HV,1)+', lambdaS = '+f(r.lamS,1)+' kJ/kg');
+  t.push('S = '+f(r.S,1)+' kg/h');
+  t.push('q = '+f(r.qkW,1)+' kW ('+f(r.qW,0)+' W)');
+  t.push('A = '+f(r.A,1)+' m2');
+  t.push('E = '+f(r.E,3)+' kg/kg');
+  return t.join('\n');
+}
+
+function update(){
+  var inp=readInputs();
+  renderModified(inp);
+  var r=solveBase(inp);
+  if(!r.ok){ last=null; showErrors(r.err); return; }
+  hideErrors();
+  last=r;
+  renderKPIs(r); updateRefs(r); renderSteps(r); renderBalance(r); renderDiagram(r);
+  var swT=sweepTF(inp,r), swP=sweepP1(inp,r);
+  renderRecs(r,swT,swP); renderSens(r,swT,swP);
+}
+
+$('presets').addEventListener('click',function(e){
+  var b=e.target.closest('button'); if(!b) return;
+  applyPreset(b.getAttribute('data-p'));
+});
+$('copy').addEventListener('click',function(){
+  if(!last) return;
+  var txt=summaryText(last), box=$('cpbox'), msg=$('copyMsg');
+  function fallback(){ box.hidden=false; box.value=txt; box.focus(); box.select(); msg.textContent='Selecciona el texto y cópialo con Ctrl+C.'; }
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(function(){ msg.textContent='Resumen copiado.'; box.hidden=true; },fallback);
+    }else fallback();
+  }catch(e){ fallback(); }
+});
+
+buildFields();
+applyPreset('c1');
+})();
+</script>
+
+</body>
+</html>
